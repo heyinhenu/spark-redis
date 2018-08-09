@@ -13,9 +13,9 @@ import scala.collection.JavaConversions._
   * RedisEndpoint represents a redis connection endpoint info: host, port, auth password
   * db number, and timeout
   *
-  * @param host the redis host or ip
-  * @param port the redis port
-  * @param auth the authentication password
+  * @param host  the redis host or ip
+  * @param port  the redis port
+  * @param auth  the authentication password
   * @param dbNum database number (should be avoided in general)
   */
 case class RedisEndpoint(val host: String = Protocol.DEFAULT_HOST,
@@ -33,13 +33,13 @@ case class RedisEndpoint(val host: String = Protocol.DEFAULT_HOST,
     * @param conf spark context config
     */
   def this(conf: SparkConf) {
-      this(
-        conf.get("redis.host", Protocol.DEFAULT_HOST),
-        conf.getInt("redis.port", Protocol.DEFAULT_PORT),
-        conf.get("redis.auth", null),
-        conf.getInt("redis.db", Protocol.DEFAULT_DATABASE),
-        conf.getInt("redis.timeout", Protocol.DEFAULT_TIMEOUT)
-      )
+    this(
+      conf.get("redis.host", Protocol.DEFAULT_HOST),
+      conf.getInt("redis.port", Protocol.DEFAULT_PORT),
+      conf.get("redis.auth", null),
+      conf.getInt("redis.db", Protocol.DEFAULT_DATABASE),
+      conf.getInt("redis.timeout", Protocol.DEFAULT_TIMEOUT)
+    )
   }
 
   /**
@@ -56,7 +56,7 @@ case class RedisEndpoint(val host: String = Protocol.DEFAULT_HOST,
     *
     * @param uri connection URI in the form of redis://:$password@$host:$port/[dbnum]
     */
-  def this(uri :String) {
+  def this(uri: String) {
     this(URI.create(uri))
   }
 
@@ -89,7 +89,7 @@ case class RedisNode(val endpoint: RedisEndpoint,
   * RedisConfig holds the state of the cluster nodes, and uses consistent hashing to map
   * keys to nodes
   */
-class RedisConfig(val initialHost: RedisEndpoint) extends  Serializable {
+class RedisConfig(val initialHost: RedisEndpoint) extends Serializable {
 
   val initialAddr = initialHost.host
 
@@ -106,7 +106,7 @@ class RedisConfig(val initialHost: RedisEndpoint) extends  Serializable {
   /**
     * @return selected db number
     */
-  def getDB :Int = {
+  def getDB: Int = {
     initialHost.dbNum
   }
 
@@ -202,7 +202,7 @@ class RedisConfig(val initialHost: RedisEndpoint) extends  Serializable {
       val range = nodes.size
       (0 until range).map(i =>
         RedisNode(new RedisEndpoint(nodes(i)._1, nodes(i)._2, initialHost.auth, initialHost.dbNum,
-                    initialHost.timeout),
+          initialHost.timeout),
           0, 16383, i, range)).toArray
     }
   }
@@ -232,11 +232,11 @@ class RedisConfig(val initialHost: RedisEndpoint) extends  Serializable {
           val host = SafeEncoder.encode(node.get(0).asInstanceOf[Array[scala.Byte]])
           val port = node.get(1).toString.toInt
           RedisNode(new RedisEndpoint(host, port, initialHost.auth, initialHost.dbNum,
-                      initialHost.timeout),
-                    sPos,
-                    ePos,
-                    i,
-                    slotInfo.size - 2)
+            initialHost.timeout),
+            sPos,
+            ePos,
+            i,
+            slotInfo.size - 2)
         })
       }
     }.toArray

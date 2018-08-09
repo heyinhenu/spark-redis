@@ -11,86 +11,79 @@ class RedisRDDSuite extends FunSuite with ENV with BeforeAndAfterAll with Should
   override def beforeAll() {
     super.beforeAll()
 
-    sc = new SparkContext(new SparkConf()
-      .setMaster("local").setAppName(getClass.getName)
-      .set("redis.host", "127.0.0.1")
-      .set("redis.port", "6379")
-      .set("redis.auth", "passwd")
+    sc = new SparkContext(
+      new SparkConf().setMaster("local").setAppName(getClass.getName).set("redis.host", "127.0.0.1").set("redis.port", "6379")
+      //      .set("redis.auth", "passwd")
     )
-    content = fromInputStream(getClass.getClassLoader.getResourceAsStream("blog")).
-      getLines.toArray.mkString("\n")
+    content = fromInputStream(getClass.getClassLoader.getResourceAsStream("blog")).getLines.toArray.mkString("\n")
 
-    redisConfigStandalone = new RedisConfig(new RedisEndpoint("127.0.0.1", 6379, "passwd"))
+    redisConfigStandalone = new RedisConfig(new RedisEndpoint("127.0.0.1", 6379))
     // THERE IS NOT AUTH FOR CLUSTER
     redisConfigCluster = new RedisConfig(new RedisEndpoint("127.0.0.1", 7379))
 
-    val wcnts = sc.parallelize(content.split("\\W+").filter(!_.isEmpty)).map((_, 1)).
-      reduceByKey(_ + _).map(x => (x._1, x._2.toString))
+    //  \w+正则匹配 a-zA-Z0-9_，匹配单词字符
+    val wcnts = sc.parallelize(content.split("\\W+").filter(!_.isEmpty)).map((_, 1)).reduceByKey(_ + _).map(x => (x._1, x._2.toString))
 
     val wds = sc.parallelize(content.split("\\W+").filter(!_.isEmpty))
 
     sc.toRedisKV(wcnts)(redisConfigStandalone)
     sc.toRedisZSET(wcnts, "all:words:cnt:sortedset")(redisConfigStandalone)
-    sc.toRedisHASH(wcnts, "all:words:cnt:hash" )(redisConfigStandalone)
-    sc.toRedisLIST(wds, "all:words:list" )(redisConfigStandalone)
+    sc.toRedisHASH(wcnts, "all:words:cnt:hash")(redisConfigStandalone)
+    sc.toRedisLIST(wds, "all:words:list")(redisConfigStandalone)
     sc.toRedisSET(wds, "all:words:set")(redisConfigStandalone)
 
     sc.toRedisKV(wcnts)(redisConfigCluster)
-    sc.toRedisZSET(wcnts, "all:words:cnt:sortedset" )(redisConfigCluster)
+    sc.toRedisZSET(wcnts, "all:words:cnt:sortedset")(redisConfigCluster)
     sc.toRedisHASH(wcnts, "all:words:cnt:hash")(redisConfigCluster)
-    sc.toRedisLIST(wds, "all:words:list" )(redisConfigCluster)
+    sc.toRedisLIST(wds, "all:words:list")(redisConfigCluster)
     sc.toRedisSET(wds, "all:words:set")(redisConfigCluster)
   }
 
   test("RedisKVRDD - default(standalone)") {
     val redisKVRDD = sc.fromRedisKeyPattern("*").getKV
     val kvContents = redisKVRDD.sortByKey().collect
-    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
-      map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
-    kvContents should be (wcnts)
+    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
+    kvContents should be(wcnts)
   }
 
   test("RedisKVRDD - standalone") {
     implicit val c: RedisConfig = redisConfigStandalone
     val redisKVRDD = sc.fromRedisKeyPattern("*").getKV
     val kvContents = redisKVRDD.sortByKey().collect
-    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
-      map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
-    kvContents should be (wcnts)
+    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
+    kvContents should be(wcnts)
   }
 
-//  test("RedisKVRDD - with keys list") {
-//    implicit val c: RedisConfig = redisConfigStandalone
-//    val redisKVRDD = sc.fromRedisKeys(Array("cluster", "RDD"))
-//    val kvContents = redisKVRDD.collect
-//    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
-//      map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
-//    kvContents should be (wcnts)
-//  }
+  test("RedisKVRDD - with keys list") {
+    implicit val c: RedisConfig = redisConfigStandalone
+    val redisKVRDD = sc.fromRedisKeys(Array("cluster", "RDD"))
+    val kvContents = redisKVRDD.collect
+    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
+      map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
+    kvContents should be(wcnts)
+  }
+  
   test("RedisKVRDD - cluster") {
     implicit val c: RedisConfig = redisConfigCluster
     val redisKVRDD = sc.fromRedisKeyPattern("*").getKV
     val kvContents = redisKVRDD.sortByKey().collect
-    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
-      map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
-    kvContents should be (wcnts)
+    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
+    kvContents should be(wcnts)
   }
 
   test("RedisZsetRDD - default(standalone)") {
     val redisZSetRDD = sc.fromRedisKeyPattern("all:words:cnt:sortedset").getZSet
     val zsetContents = redisZSetRDD.sortByKey().collect
-    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
-      map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString + ".0")).toArray.sortBy(_._1)
-    zsetContents should be (wcnts)
+    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString + ".0")).toArray.sortBy(_._1)
+    zsetContents should be(wcnts)
   }
 
   test("RedisZsetRDD - standalone") {
     implicit val c: RedisConfig = redisConfigStandalone
     val redisZSetRDD = sc.fromRedisKeyPattern("all:words:cnt:sortedset").getZSet
     val zsetContents = redisZSetRDD.sortByKey().collect
-    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
-      map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString + ".0")).toArray.sortBy(_._1)
-    zsetContents should be (wcnts)
+    val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString + ".0")).toArray.sortBy(_._1)
+    zsetContents should be(wcnts)
   }
 
   test("RedisZsetRDD - cluster") {
@@ -99,48 +92,48 @@ class RedisRDDSuite extends FunSuite with ENV with BeforeAndAfterAll with Should
     val zsetContents = redisZSetRDD.sortByKey().collect
     val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
       map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString + ".0")).toArray.sortBy(_._1)
-    zsetContents should be (wcnts)
+    zsetContents should be(wcnts)
   }
 
   test("RedisHashRDD - default(standalone)") {
-    val redisHashRDD = sc.fromRedisKeyPattern( "all:words:cnt:hash").getHash
+    val redisHashRDD = sc.fromRedisKeyPattern("all:words:cnt:hash").getHash
     val hashContents = redisHashRDD.sortByKey().collect
     val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
       map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
-    hashContents should be (wcnts)
+    hashContents should be(wcnts)
   }
 
   test("RedisHashRDD - standalone") {
     implicit val c: RedisConfig = redisConfigStandalone
-    val redisHashRDD = sc.fromRedisKeyPattern( "all:words:cnt:hash").getHash
+    val redisHashRDD = sc.fromRedisKeyPattern("all:words:cnt:hash").getHash
     val hashContents = redisHashRDD.sortByKey().collect
     val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
       map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
-    hashContents should be (wcnts)
+    hashContents should be(wcnts)
   }
 
   test("RedisHashRDD - cluster") {
     implicit val c: RedisConfig = redisConfigCluster
-    val redisHashRDD = sc.fromRedisKeyPattern( "all:words:cnt:hash").getHash
+    val redisHashRDD = sc.fromRedisKeyPattern("all:words:cnt:hash").getHash
     val hashContents = redisHashRDD.sortByKey().collect
     val wcnts = content.split("\\W+").filter(!_.isEmpty).map((_, 1)).groupBy(_._1).
       map(x => (x._1, x._2.map(_._2).reduce(_ + _).toString)).toArray.sortBy(_._1)
-    hashContents should be (wcnts)
+    hashContents should be(wcnts)
   }
 
   test("RedisListRDD - default(standalone)") {
-    val redisListRDD = sc.fromRedisKeyPattern( "all:words:list").getList
+    val redisListRDD = sc.fromRedisKeyPattern("all:words:list").getList
     val listContents = redisListRDD.sortBy(x => x).collect
     val ws = content.split("\\W+").filter(!_.isEmpty).sorted
-    listContents should be (ws)
+    listContents should be(ws)
   }
 
   test("RedisListRDD - standalone") {
     implicit val c: RedisConfig = redisConfigStandalone
-    val redisListRDD = sc.fromRedisKeyPattern( "all:words:list").getList
+    val redisListRDD = sc.fromRedisKeyPattern("all:words:list").getList
     val listContents = redisListRDD.sortBy(x => x).collect
     val ws = content.split("\\W+").filter(!_.isEmpty).sorted
-    listContents should be (ws)
+    listContents should be(ws)
   }
 
   test("RedisListRDD - cluster") {
@@ -148,22 +141,22 @@ class RedisRDDSuite extends FunSuite with ENV with BeforeAndAfterAll with Should
     val redisListRDD = sc.fromRedisKeyPattern("all:words:list").getList
     val listContents = redisListRDD.sortBy(x => x).collect
     val ws = content.split("\\W+").filter(!_.isEmpty).sorted
-    listContents should be (ws)
+    listContents should be(ws)
   }
 
   test("RedisSetRDD - default(standalone)") {
-    val redisSetRDD = sc.fromRedisKeyPattern( "all:words:set").getSet
+    val redisSetRDD = sc.fromRedisKeyPattern("all:words:set").getSet
     val setContents = redisSetRDD.sortBy(x => x).collect
     val ws = content.split("\\W+").filter(!_.isEmpty).distinct.sorted
-    setContents should be (ws)
+    setContents should be(ws)
   }
 
   test("RedisSetRDD - standalone") {
     implicit val c: RedisConfig = redisConfigStandalone
-    val redisSetRDD = sc.fromRedisKeyPattern( "all:words:set").getSet
+    val redisSetRDD = sc.fromRedisKeyPattern("all:words:set").getSet
     val setContents = redisSetRDD.sortBy(x => x).collect
     val ws = content.split("\\W+").filter(!_.isEmpty).distinct.sorted
-    setContents should be (ws)
+    setContents should be(ws)
   }
 
   test("RedisSetRDD - cluster") {
@@ -171,14 +164,13 @@ class RedisRDDSuite extends FunSuite with ENV with BeforeAndAfterAll with Should
     val redisSetRDD = sc.fromRedisKeyPattern("all:words:set").getSet
     val setContents = redisSetRDD.sortBy(x => x).collect
     val ws = content.split("\\W+").filter(!_.isEmpty).distinct.sorted
-    setContents should be (ws)
+    setContents should be(ws)
   }
 
   test("Expire - default(standalone)") {
     val expireTime = 1
     val prefix = s"#expire in ${expireTime}#:"
-    val wcnts = sc.parallelize(content.split("\\W+").filter(!_.isEmpty)).map((_, 1)).
-      reduceByKey(_ + _).map(x => (prefix + x._1, x._2.toString))
+    val wcnts = sc.parallelize(content.split("\\W+").filter(!_.isEmpty)).map((_, 1)).reduceByKey(_ + _).map(x => (prefix + x._1, x._2.toString))
     val wds = sc.parallelize(content.split("\\W+").filter(!_.isEmpty))
     sc.toRedisKV(wcnts, expireTime)
     sc.toRedisZSET(wcnts, prefix + "all:words:cnt:sortedset", expireTime)
@@ -186,15 +178,14 @@ class RedisRDDSuite extends FunSuite with ENV with BeforeAndAfterAll with Should
     sc.toRedisLIST(wds, prefix + "all:words:list", expireTime)
     sc.toRedisSET(wds, prefix + "all:words:set", expireTime)
     Thread.sleep(expireTime * 1000 + 1)
-    sc.fromRedisKeyPattern(prefix + "*").count should be (0)
+    sc.fromRedisKeyPattern(prefix + "*").count should be(0)
   }
 
   test("Expire - standalone") {
     val expireTime = 1
     val prefix = s"#expire in ${expireTime}#:"
     implicit val c: RedisConfig = redisConfigStandalone
-    val wcnts = sc.parallelize(content.split("\\W+").filter(!_.isEmpty)).map((_, 1)).
-      reduceByKey(_ + _).map(x => (prefix + x._1, x._2.toString))
+    val wcnts = sc.parallelize(content.split("\\W+").filter(!_.isEmpty)).map((_, 1)).reduceByKey(_ + _).map(x => (prefix + x._1, x._2.toString))
     val wds = sc.parallelize(content.split("\\W+").filter(!_.isEmpty))
     sc.toRedisKV(wcnts, expireTime)
     sc.toRedisZSET(wcnts, prefix + "all:words:cnt:sortedset", expireTime)
@@ -202,15 +193,14 @@ class RedisRDDSuite extends FunSuite with ENV with BeforeAndAfterAll with Should
     sc.toRedisLIST(wds, prefix + "all:words:list", expireTime)
     sc.toRedisSET(wds, prefix + "all:words:set", expireTime)
     Thread.sleep(expireTime * 1000 + 1)
-    sc.fromRedisKeyPattern(prefix + "*").count should be (0)
+    sc.fromRedisKeyPattern(prefix + "*").count should be(0)
   }
 
   test("Expire - cluster") {
     val expireTime = 1
     val prefix = s"#expire in ${expireTime}#:"
     implicit val c: RedisConfig = redisConfigCluster
-    val wcnts = sc.parallelize(content.split("\\W+").filter(!_.isEmpty)).map((_, 1)).
-      reduceByKey(_ + _).map(x => (prefix + x._1, x._2.toString))
+    val wcnts = sc.parallelize(content.split("\\W+").filter(!_.isEmpty)).map((_, 1)).reduceByKey(_ + _).map(x => (prefix + x._1, x._2.toString))
     val wds = sc.parallelize(content.split("\\W+").filter(!_.isEmpty))
     sc.toRedisKV(wcnts, expireTime)
     sc.toRedisZSET(wcnts, prefix + "all:words:cnt:sortedset", expireTime)
@@ -218,7 +208,7 @@ class RedisRDDSuite extends FunSuite with ENV with BeforeAndAfterAll with Should
     sc.toRedisLIST(wds, prefix + "all:words:list", expireTime)
     sc.toRedisSET(wds, prefix + "all:words:set", expireTime)
     Thread.sleep(expireTime * 1000 + 1)
-    sc.fromRedisKeyPattern(prefix + "*").count should be (0)
+    sc.fromRedisKeyPattern(prefix + "*").count should be(0)
   }
 
   override def afterAll(): Unit = {

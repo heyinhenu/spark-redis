@@ -12,9 +12,7 @@ import scala.collection.JavaConversions._
 import com.redislabs.provider.redis.partitioner._
 
 
-class RedisKVRDD(prev: RDD[String],
-                 val rddType: String)
-    extends RDD[(String, String)](prev) with Keys {
+class RedisKVRDD(prev: RDD[String], val rddType: String) extends RDD[(String, String)](prev) with Keys {
 
   override def getPartitions: Array[Partition] = prev.partitions
 
@@ -27,7 +25,7 @@ class RedisKVRDD(prev: RDD[String],
     val auth = partition.redisConfig.getAuth
     val db = partition.redisConfig.getDB
     rddType match {
-      case "kv"   => getKV(nodes, keys)
+      case "kv" => getKV(nodes, keys)
       case "hash" => getHASH(nodes, keys)
       case "zset" => getZSET(nodes, keys)
     }
@@ -35,42 +33,41 @@ class RedisKVRDD(prev: RDD[String],
 
   def getKV(nodes: Array[RedisNode], keys: Iterator[String]): Iterator[(String, String)] = {
     groupKeysByNode(nodes, keys).flatMap {
-      x =>
-        {
-          val conn = x._1.endpoint.connect()
-          val stringKeys = filterKeysByType(conn, x._2, "string")
-          val pipeline = conn.pipelined
-          stringKeys.foreach(pipeline.get)
-          val res = stringKeys.zip(pipeline.syncAndReturnAll).iterator.
-            asInstanceOf[Iterator[(String, String)]]
-          conn.close
-          res
-        }
+      x => {
+        val conn = x._1.endpoint.connect()
+        val stringKeys = filterKeysByType(conn, x._2, "string")
+        val pipeline = conn.pipelined
+        stringKeys.foreach(pipeline.get)
+        val res = stringKeys.zip(pipeline.syncAndReturnAll).iterator.
+          asInstanceOf[Iterator[(String, String)]]
+        conn.close
+        res
+      }
     }.iterator
   }
+
   def getHASH(nodes: Array[RedisNode], keys: Iterator[String]): Iterator[(String, String)] = {
     groupKeysByNode(nodes, keys).flatMap {
-      x =>
-        {
-          val conn = x._1.endpoint.connect()
-          val hashKeys = filterKeysByType(conn, x._2, "hash")
-          val res = hashKeys.flatMap(conn.hgetAll).iterator
-          conn.close
-          res
-        }
+      x => {
+        val conn = x._1.endpoint.connect()
+        val hashKeys = filterKeysByType(conn, x._2, "hash")
+        val res = hashKeys.flatMap(conn.hgetAll).iterator
+        conn.close
+        res
+      }
     }.iterator
   }
+
   def getZSET(nodes: Array[RedisNode], keys: Iterator[String]): Iterator[(String, String)] = {
     groupKeysByNode(nodes, keys).flatMap {
-      x =>
-        {
-          val conn = x._1.endpoint.connect()
-          val zsetKeys = filterKeysByType(conn, x._2, "zset")
-          val res = zsetKeys.flatMap(k => conn.zrangeWithScores(k, 0, -1)).
-            map(tup => (tup.getElement, tup.getScore.toString)).iterator
-          conn.close
-          res
-        }
+      x => {
+        val conn = x._1.endpoint.connect()
+        val zsetKeys = filterKeysByType(conn, x._2, "zset")
+        val res = zsetKeys.flatMap(k => conn.zrangeWithScores(k, 0, -1)).
+          map(tup => (tup.getElement, tup.getScore.toString)).iterator
+        conn.close
+        res
+      }
     }.iterator
   }
 }
@@ -86,33 +83,32 @@ class RedisListRDD(prev: RDD[String], val rddType: String) extends RDD[String](p
     val nodes = partition.redisConfig.getNodesBySlots(sPos, ePos)
     val keys = firstParent[String].iterator(split, context)
     rddType match {
-      case "set"  => getSET(nodes, keys)
+      case "set" => getSET(nodes, keys)
       case "list" => getLIST(nodes, keys)
     }
   }
 
   def getSET(nodes: Array[RedisNode], keys: Iterator[String]): Iterator[String] = {
     groupKeysByNode(nodes, keys).flatMap {
-      x =>
-        {
-          val conn = x._1.endpoint.connect()
-          val setKeys = filterKeysByType(conn, x._2, "set")
-          val res = setKeys.flatMap(conn.smembers).iterator
-          conn.close
-          res
-        }
+      x => {
+        val conn = x._1.endpoint.connect()
+        val setKeys = filterKeysByType(conn, x._2, "set")
+        val res = setKeys.flatMap(conn.smembers).iterator
+        conn.close
+        res
+      }
     }.iterator
   }
+
   def getLIST(nodes: Array[RedisNode], keys: Iterator[String]): Iterator[String] = {
     groupKeysByNode(nodes, keys).flatMap {
-      x =>
-        {
-          val conn = x._1.endpoint.connect()
-          val listKeys = filterKeysByType(conn, x._2, "list")
-          val res = listKeys.flatMap(conn.lrange(_, 0, -1)).iterator
-          conn.close
-          res
-        }
+      x => {
+        val conn = x._1.endpoint.connect()
+        val listKeys = filterKeysByType(conn, x._2, "list")
+        val res = listKeys.flatMap(conn.lrange(_, 0, -1)).iterator
+        conn.close
+        res
+      }
     }.iterator
   }
 }
@@ -122,7 +118,7 @@ class RedisKeysRDD(sc: SparkContext,
                    val keyPattern: String = "*",
                    val partitionNum: Int = 3,
                    val keys: Array[String] = null)
-    extends RDD[String](sc, Seq.empty) with Logging with Keys {
+  extends RDD[String](sc, Seq.empty) with Logging with Keys {
 
   override protected def getPreferredLocations(split: Partition): Seq[String] = {
     Seq(split.asInstanceOf[RedisPartition].redisConfig.initialAddr)
@@ -155,23 +151,23 @@ class RedisKeysRDD(sc: SparkContext,
     } else if (hosts.size < partitionNum) {
       val presExtCnt = partitionNum / hosts.size
       val lastExtCnt = if (presExtCnt * hosts.size < partitionNum) (presExtCnt + 1) else presExtCnt
-      hosts.zipWithIndex.flatMap{
-        case(host, idx) => {
+      hosts.zipWithIndex.flatMap {
+        case (host, idx) => {
           split(host, if (idx == hosts.size - 1) lastExtCnt else presExtCnt)
         }
       }
     } else {
       val presExtCnt = hosts.size / partitionNum
-      (0 until partitionNum).map{
+      (0 until partitionNum).map {
         idx => {
           val ip = hosts(idx * presExtCnt).endpoint.host
           val port = hosts(idx * presExtCnt).endpoint.port
           val start = hosts(idx * presExtCnt).startSlot
           val end = hosts(if (idx == partitionNum - 1) {
-                            (hosts.size-1)
-                          } else {
-                            ((idx + 1) * presExtCnt - 1)
-                          }).endSlot
+            (hosts.size - 1)
+          } else {
+            ((idx + 1) * presExtCnt - 1)
+          }).endSlot
           (ip, port, start, end)
         }
       }
@@ -200,18 +196,23 @@ class RedisKeysRDD(sc: SparkContext,
     }
 
   }
+
   def getSet(): RDD[String] = {
     new RedisListRDD(this, "set")
   }
+
   def getList(): RDD[String] = {
     new RedisListRDD(this, "list")
   }
+
   def getKV(): RDD[(String, String)] = {
     new RedisKVRDD(this, "kv")
   }
+
   def getHash(): RDD[(String, String)] = {
     new RedisKVRDD(this, "hash")
   }
+
   def getZSet(): RDD[(String, String)] = {
     new RedisKVRDD(this, "zset")
   }
@@ -230,15 +231,16 @@ trait Keys {
         escape match {
           case true => judge(key.substring(1), false)
           case false => key.charAt(0) match {
-                          case '*'  => true
-                          case '?'  => true
-                          case '['  => true
-                          case '\\' => judge(key.substring(1), true)
-                          case _    => judge(key.substring(1), false)
-                        }
+            case '*' => true
+            case '?' => true
+            case '[' => true
+            case '\\' => judge(key.substring(1), true)
+            case _ => judge(key.substring(1), false)
+          }
         }
       }
     }
+
     judge(key, false)
   }
 
@@ -260,10 +262,10 @@ trait Keys {
 
   /**
     * @param nodes list of RedisNode
-    * @param sPos start position of slots
-    * @param ePos end position of slots
+    * @param sPos  start position of slots
+    * @param ePos  end position of slots
     * @param keyPattern
-    * return keys whose slot is in [sPos, ePos]
+    *              return keys whose slot is in [sPos, ePos]
     */
   def getKeys(nodes: Array[RedisNode],
               sPos: Int,
@@ -290,16 +292,19 @@ trait Keys {
 
   /**
     * @param nodes list of RedisNode
-    * @param keys list of keys
-    * return (node: (key1, key2, ...), node2: (key3, key4,...), ...)
+    * @param keys  list of keys
+    *              return (node: (key1, key2, ...), node2: (key3, key4,...), ...)
     */
   def groupKeysByNode(nodes: Array[RedisNode], keys: Iterator[String]):
   Array[(RedisNode, Array[String])] = {
     def getNode(key: String): RedisNode = {
       val slot = JedisClusterCRC16.getSlot(key)
       /* Master only */
-      nodes.filter(node => { node.startSlot <= slot && node.endSlot >= slot }).filter(_.idx == 0)(0)
+      nodes.filter(node => {
+        node.startSlot <= slot && node.endSlot >= slot
+      }).filter(_.idx == 0)(0)
     }
+
     keys.map(key => (getNode(key), key)).toArray.groupBy(_._1).
       map(x => (x._1, x._2.map(_._2))).toArray
   }
@@ -310,7 +315,7 @@ trait Keys {
     * keys are guaranteed that they belongs with the server jedis connected to.
     * return keys of "t" type
     */
-  def filterKeysByType(conn: Jedis, keys:Array[String], t:String): Array[String] = {
+  def filterKeysByType(conn: Jedis, keys: Array[String], t: String): Array[String] = {
     val pipeline = conn.pipelined
     keys.foreach(pipeline.`type`)
     val types = pipeline.syncAndReturnAll

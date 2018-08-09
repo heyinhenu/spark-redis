@@ -7,6 +7,7 @@ import com.redislabs.provider.redis.rdd._
 
 /**
   * RedisContext extends sparkContext's functionality with redis functions
+  *
   * @param sc a spark context
   */
 class RedisContext(@transient val sc: SparkContext) extends Serializable {
@@ -14,7 +15,7 @@ class RedisContext(@transient val sc: SparkContext) extends Serializable {
   import com.redislabs.provider.redis.RedisContext._
 
   /**
-    * @param keyPattern a key pattern to match, or a single key
+    * @param keyPattern   a key pattern to match, or a single key
     * @param partitionNum number of partitions
     * @return RedisKeysRDD of simple Keys stored in redis server
     */
@@ -27,7 +28,7 @@ class RedisContext(@transient val sc: SparkContext) extends Serializable {
   }
 
   /**
-    * @param keys an array of keys
+    * @param keys         an array of keys
     * @param partitionNum number of partitions
     * @return RedisKeysRDD of simple Keys stored in redis server
     */
@@ -44,7 +45,7 @@ class RedisContext(@transient val sc: SparkContext) extends Serializable {
     * @param ttl time to live
     */
   def toRedisKV(kvs: RDD[(String, String)], ttl: Int = 0)
-     (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
+               (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
 
     kvs.foreachPartition(partition => setKVs(partition, ttl, redisConfig))
   }
@@ -52,10 +53,10 @@ class RedisContext(@transient val sc: SparkContext) extends Serializable {
   /**
     * @param kvs      Pair RDD of K/V
     * @param hashName target hash's name which hold all the kvs
-    * @param ttl time to live
+    * @param ttl      time to live
     */
   def toRedisHASH(kvs: RDD[(String, String)], hashName: String, ttl: Int = 0)
-    (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
+                 (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
 
     kvs.foreachPartition(partition => setHash(hashName, partition, ttl, redisConfig))
   }
@@ -63,10 +64,10 @@ class RedisContext(@transient val sc: SparkContext) extends Serializable {
   /**
     * @param kvs      Pair RDD of K/V
     * @param zsetName target zset's name which hold all the kvs
-    * @param ttl time to live
+    * @param ttl      time to live
     */
   def toRedisZSET(kvs: RDD[(String, String)], zsetName: String, ttl: Int = 0)
-    (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
+                 (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
 
     kvs.foreachPartition(partition => setZset(zsetName, partition, ttl, redisConfig))
   }
@@ -74,10 +75,10 @@ class RedisContext(@transient val sc: SparkContext) extends Serializable {
   /**
     * @param vs      RDD of values
     * @param setName target set's name which hold all the vs
-    * @param ttl time to live
+    * @param ttl     time to live
     */
   def toRedisSET(vs: RDD[String], setName: String, ttl: Int = 0)
-    (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
+                (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
 
     vs.foreachPartition(partition => setSet(setName, partition, ttl, redisConfig))
   }
@@ -85,10 +86,10 @@ class RedisContext(@transient val sc: SparkContext) extends Serializable {
   /**
     * @param vs       RDD of values
     * @param listName target list's name which hold all the vs
-    * @param ttl time to live
+    * @param ttl      time to live
     */
   def toRedisLIST(vs: RDD[String], listName: String, ttl: Int = 0)
-    (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
+                 (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
 
     vs.foreachPartition(partition => setList(listName, partition, ttl, redisConfig))
   }
@@ -102,13 +103,12 @@ class RedisContext(@transient val sc: SparkContext) extends Serializable {
   def toRedisFixedLIST(vs: RDD[String],
                        listName: String,
                        listSize: Int = 0)
-    (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
+                      (implicit redisConfig: RedisConfig = new RedisConfig(new RedisEndpoint(sc.getConf))) {
 
     vs.foreachPartition(partition => setFixedList(listName, listSize, partition, redisConfig))
   }
 
 }
-
 
 
 object RedisContext extends Serializable {
